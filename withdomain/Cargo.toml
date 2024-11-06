@@ -1,0 +1,10 @@
+[package]
+name = "withdomain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ipnetwork = "0.20"
+ureq = "2.5"
+colored = "2.0"
+clearscreen = "1.0"
