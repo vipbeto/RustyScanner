@@ -16,39 +16,39 @@ const PROVIDERS_URL: &str = "https://adfastltda.com.br/scan/providerv4.json";
 
 #[derive(StructOpt)]
 struct Cli {
-    /// File containing CIDR ranges (one per line)
-    #[structopt(short, long, help = "File containing CIDR ranges")]
+    /// Arquivo contendo as faixas CIDR (uma por linha)
+    #[structopt(short, long, help = "Arquivo contendo as faixas CIDR")]
     file: Option<PathBuf>,
 
-    /// Single CIDR range to scan (e.g., "104.16.51.0/23")
-    #[structopt(help = "CIDR range to scan", conflicts_with = "file", conflicts_with = "only")]
+    /// Faixa CIDR única para escanear (ex.: "104.16.51.0/23")
+    #[structopt(help = "Faixa CIDR para escanear", conflicts_with = "file", conflicts_with = "only")]
     cidr: Option<String>,
 
-    /// Scan CIDRs from specific provider
-    #[structopt(long, help = "Scan CIDRs from specific provider")]
+    /// Escanear CIDRs de um provedor específico
+    #[structopt(long, help = "Escanear CIDRs de um provedor específico")]
     only: Option<String>,
 
-    /// List available providers
-    #[structopt(long, help = "List all available providers")]
+    /// Listar provedores disponíveis
+    #[structopt(long, help = "Listar todos os provedores disponíveis")]
     only_list: bool,
 
-    /// Output file for results
-    #[structopt(short, long, help = "Output file for results")]
+    /// Arquivo de saída para resultados
+    #[structopt(short, long, help = "Arquivo de saída para resultados")]
     output: Option<PathBuf>,
 
-    /// Number of concurrent scans
+    /// Número de escaneamentos simultâneos
     #[structopt(short, long, default_value = "100")]
     concurrent: usize,
 
-    /// Timeout in milliseconds for each connection attempt
+    /// Timeout em milissegundos para cada tentativa de conexão
     #[structopt(short, long, default_value = "1000")]
     timeout_ms: u64,
 
-    /// Port to scan
+    /// Porta para escanear
     #[structopt(short, long, default_value = "80")]
     port: u16,
 
-    /// Verbose output
+    /// Saída detalhada
     #[structopt(short, long)]
     verbose: bool,
 }
@@ -104,10 +104,10 @@ async fn download_providers_file() -> Result<String, Box<dyn std::error::Error>>
     
     let providers_path = format!("{}/providers.json", config_dir);
     
-    // Download file
+    // Baixar arquivo
     let response = reqwest::get(PROVIDERS_URL).await?.text().await?;
     
-    // Save to file
+    // Salvar no arquivo
     fs::write(&providers_path, &response)?;
     
     Ok(providers_path)
@@ -121,7 +121,7 @@ fn parse_providers(content: &str) -> Vec<Provider> {
     for line in content.lines() {
         let line = line.trim();
         if line.starts_with("Provider: ") {
-            // Save previous provider if exists
+            // Salvar o provedor anterior se existir
             if let Some(name) = current_provider.take() {
                 providers.push(Provider {
                     name,
@@ -130,15 +130,15 @@ fn parse_providers(content: &str) -> Vec<Provider> {
                 current_cidrs.clear();
             }
             
-            // Start new provider
+            // Iniciar novo provedor
             current_provider = Some(line.trim_start_matches("Provider: ").to_string());
         } else if !line.is_empty() && current_provider.is_some() {
-            // Add CIDR to current provider
+            // Adicionar CIDR ao provedor atual
             current_cidrs.push(line.to_string());
         }
     }
 
-    // Add last provider
+    // Adicionar o último provedor
     if let Some(name) = current_provider {
         providers.push(Provider {
             name,
@@ -158,7 +158,7 @@ async fn get_provider_cidrs(provider_name: &str) -> Result<Vec<String>, Box<dyn 
     if let Some(provider) = providers.into_iter().find(|p| p.name.to_lowercase() == provider_name.to_lowercase()) {
         Ok(provider.cidrs)
     } else {
-        Err("Provider not found".into())
+        Err("Provedor não encontrado".into())
     }
 }
 
@@ -171,9 +171,9 @@ async fn list_providers() -> Result<(), Box<dyn std::error::Error>> {
     println!("=====================");
     
     for provider in providers {
-        println!("\nProvider: {}", provider.name);
+        println!("\nProvedor: {}", provider.name);
         println!("CIDRs disponíveis: {}", provider.cidrs.len());
-        println!("Ranges:");
+        println!("Faixas:");
         for cidr in provider.cidrs {
             println!("  - {}", cidr);
         }
@@ -234,7 +234,7 @@ async fn scan_network(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::from_args();
     
-    // Verifica se o usuário quer listar os providers
+    // Verifica se o usuário quer listar os provedores
     if args.only_list {
         return list_providers().await;
     }
@@ -243,8 +243,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match get_provider_cidrs(&provider).await {
             Ok(cidrs) => cidrs,
             Err(e) => {
-                eprintln!("Erro ao obter CIDRs do provider {}: {}", provider, e);
-                eprintln!("Use --only-list para ver os providers disponíveis");
+                eprintln!("Erro ao obter CIDRs do provedor {}: {}", provider, e);
+                eprintln!("Use --only-list para ver os provedores disponíveis");
                 return Ok(());
             }
         }
@@ -259,8 +259,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(cidr) = args.cidr.as_ref() {
         vec![cidr.clone()]
     } else {
-        eprintln!("É necessário fornecer um CIDR, um arquivo com lista de CIDRs, ou um provider (-only)");
-        eprintln!("Use --only-list para ver os providers disponíveis");
+        eprintln!("É necessário fornecer um CIDR, um arquivo com lista de CIDRs, ou um provedor (-only)");
+        eprintln!("Use --only-list para ver os provedores disponíveis");
         return Ok(());
     };
 
