@@ -5,7 +5,8 @@ apt update -y
 apt upgrade -y
 apt list --upgradable
 apt --fix-broken install
-pkg install rust git
+pkg install rust
+pkg install git
 rm -rf ~/RustyScanner
 cd ~
 git clone https://github.com/adfastltda/RustyScanner.git
