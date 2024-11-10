@@ -275,7 +275,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Executa o escaneamento
     let mut all_results = Vec::new();
-    for cidr in cidrs {
+    for cidr in &cidrs {
         let network = IpNetwork::from_str(&cidr)?;
         let results = scan_network(network, args.port, args.concurrent, args.timeout_ms, args.verbose).await;
         all_results.extend(results);

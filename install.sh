@@ -25,6 +25,12 @@ cd ~/RustyScanner/Scan/
 echo "Compilando o RustyScanner..."
 cargo build --release
 
+# Verificando se o binário foi gerado corretamente
+if [ ! -f "target/release/scanner" ]; then
+  echo "Falha ao gerar o binário 'scanner'."
+  exit 1
+fi
+
 # Movendo o binário para o diretório $PREFIX/bin
 echo "Movendo o binário para $PREFIX/bin/scan..."
 cp target/release/scanner $PREFIX/bin/scan
