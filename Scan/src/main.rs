@@ -1,27 +1,29 @@
-use std::net::IpAddr;
-use std::str::FromStr;
-use std::time::Duration;
-use tokio::net::TcpStream;
-use ipnetwork::IpNetwork;
-use structopt::StructOpt;
-use futures::stream::{self, StreamExt};
-use tokio::time::timeout;
 use std::fs::{self, File, create_dir_all};
 use std::io::{self, BufRead, Write};
+use std::net::IpAddr;
 use std::path::PathBuf;
+use std::str::FromStr;
+use std::time::Duration;
 use chrono::Local;
+use futures::stream::{self, StreamExt};
+use ipnetwork::IpNetwork;
 use indicatif::{ProgressBar, ProgressStyle};
+use reqwest;
+use structopt::StructOpt;
+use tokio::net::TcpStream;
+use tokio::time::timeout;
+use std::path::Path;
 
 const PROVIDERS_URL: &str = "https://adfastltda.com.br/scan/providerv4.json";
 
 #[derive(StructOpt)]
 struct Cli {
-    /// Arquivo contendo as faixas CIDR (uma por linha)
-    #[structopt(short, long, help = "Arquivo contendo as faixas CIDR")]
+    /// Arquivo contendo os ranges CIDR (um por linha)
+    #[structopt(short, long, help = "Arquivo contendo ranges CIDR")]
     file: Option<PathBuf>,
 
-    /// Faixa CIDR única para escanear (ex.: "104.16.51.0/23")
-    #[structopt(help = "Faixa CIDR para escanear", conflicts_with = "file", conflicts_with = "only")]
+    /// Range CIDR único para escanear (exemplo: "104.16.51.0/23")
+    #[structopt(help = "Range CIDR para escanear", conflicts_with = "file", conflicts_with = "only")]
     cidr: Option<String>,
 
     /// Escanear CIDRs de um provedor específico
@@ -32,11 +34,11 @@ struct Cli {
     #[structopt(long, help = "Listar todos os provedores disponíveis")]
     only_list: bool,
 
-    /// Arquivo de saída para resultados
-    #[structopt(short, long, help = "Arquivo de saída para resultados")]
+    /// Arquivo de saída para os resultados
+    #[structopt(short, long, help = "Arquivo de saída para os resultados")]
     output: Option<PathBuf>,
 
-    /// Número de escaneamentos simultâneos
+    /// Número de escaneamentos concorrentes
     #[structopt(short, long, default_value = "100")]
     concurrent: usize,
 
@@ -71,8 +73,8 @@ fn read_cidrs(path: &PathBuf) -> io::Result<Vec<String>> {
     let mut cidrs = Vec::new();
     
     for line in reader.lines() {
-        let line = line?; 
-        let trimmed = line.trim(); 
+        let line = line?;
+        let trimmed = line.trim();
         if !trimmed.is_empty() {
             cidrs.push(trimmed.to_string());
         }
@@ -101,15 +103,22 @@ async fn download_providers_file() -> Result<String, Box<dyn std::error::Error>>
     let prefix = std::env::var("PREFIX").unwrap_or_else(|_| String::from("/data/data/com.termux/files/usr"));
     let config_dir = format!("{}/etc/.scanconfig", prefix);
     create_dir_all(&config_dir)?;
-    
+
     let providers_path = format!("{}/providers.json", config_dir);
-    
-    // Baixar arquivo
+
+    // Verifica se o arquivo já existe, se sim, usa o arquivo existente
+    if Path::new(&providers_path).exists() {
+        println!("Arquivo de provedores já encontrado, utilizando o existente.");
+        return Ok(providers_path);
+    }
+
+    // Caso não exista, baixa o arquivo
+    println!("Arquivo de provedores não encontrado, fazendo o download...");
     let response = reqwest::get(PROVIDERS_URL).await?.text().await?;
-    
+
     // Salvar no arquivo
     fs::write(&providers_path, &response)?;
-    
+
     Ok(providers_path)
 }
 
@@ -121,7 +130,7 @@ fn parse_providers(content: &str) -> Vec<Provider> {
     for line in content.lines() {
         let line = line.trim();
         if line.starts_with("Provider: ") {
-            // Salvar o provedor anterior se existir
+            // Salvar o provedor anterior, se existir
             if let Some(name) = current_provider.take() {
                 providers.push(Provider {
                     name,
@@ -130,7 +139,7 @@ fn parse_providers(content: &str) -> Vec<Provider> {
                 current_cidrs.clear();
             }
             
-            // Iniciar novo provedor
+            // Iniciar um novo provedor
             current_provider = Some(line.trim_start_matches("Provider: ").to_string());
         } else if !line.is_empty() && current_provider.is_some() {
             // Adicionar CIDR ao provedor atual
@@ -152,34 +161,14 @@ fn parse_providers(content: &str) -> Vec<Provider> {
 async fn get_provider_cidrs(provider_name: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let providers_path = download_providers_file().await?;
     let content = fs::read_to_string(providers_path)?;
-    
+
     let providers = parse_providers(&content);
-    
+
     if let Some(provider) = providers.into_iter().find(|p| p.name.to_lowercase() == provider_name.to_lowercase()) {
         Ok(provider.cidrs)
     } else {
         Err("Provedor não encontrado".into())
     }
-}
-
-async fn list_providers() -> Result<(), Box<dyn std::error::Error>> {
-    let providers_path = download_providers_file().await?;
-    let content = fs::read_to_string(providers_path)?;
-    let providers = parse_providers(&content);
-    
-    println!("\nProvedores disponíveis:");
-    println!("=====================");
-    
-    for provider in providers {
-        println!("\nProvedor: {}", provider.name);
-        println!("CIDRs disponíveis: {}", provider.cidrs.len());
-        println!("Faixas:");
-        for cidr in provider.cidrs {
-            println!("  - {}", cidr);
-        }
-    }
-    
-    Ok(())
 }
 
 async fn scan_network(
@@ -230,11 +219,31 @@ async fn scan_network(
     results.into_iter().filter_map(|x| x).collect()
 }
 
+async fn list_providers() -> Result<(), Box<dyn std::error::Error>> {
+    let providers_path = download_providers_file().await?;
+    let content = fs::read_to_string(providers_path)?;
+    let providers = parse_providers(&content);
+    
+    println!("\nProvedores disponíveis:");
+    println!("=====================");
+    
+    for provider in providers {
+        println!("\nProvider: {}", provider.name);
+        println!("CIDRs disponíveis: {}", provider.cidrs.len());
+        println!("Ranges:");
+        for cidr in provider.cidrs {
+            println!("  - {}", cidr);
+        }
+    }
+    
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Cli::from_args();
     
-    // Verifica se o usuário quer listar os provedores
+    // Verifica se o usuário quer listar os providers
     if args.only_list {
         return list_providers().await;
     }
@@ -243,8 +252,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match get_provider_cidrs(&provider).await {
             Ok(cidrs) => cidrs,
             Err(e) => {
-                eprintln!("Erro ao obter CIDRs do provedor {}: {}", provider, e);
-                eprintln!("Use --only-list para ver os provedores disponíveis");
+                eprintln!("Erro ao obter CIDRs do provider {}: {}", provider, e);
+                eprintln!("Use --only-list para ver os providers disponíveis");
                 return Ok(());
             }
         }
@@ -259,26 +268,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else if let Some(cidr) = args.cidr.as_ref() {
         vec![cidr.clone()]
     } else {
-        eprintln!("É necessário fornecer um CIDR, um arquivo com lista de CIDRs, ou um provedor (-only)");
-        eprintln!("Use --only-list para ver os provedores disponíveis");
+        eprintln!("É necessário fornecer um CIDR, um arquivo com lista de CIDRs, ou um provider (-only)");
+        eprintln!("Use --only-list para ver os providers disponíveis");
         return Ok(());
     };
 
-    let scan_info = format!(
-        "Scan para a porta {} com timeout de {} ms, {} conexões simultâneas",
-        args.port, args.timeout_ms, args.concurrent
-    );
-
+    // Executa o escaneamento
     let mut all_results = Vec::new();
-    
     for cidr in cidrs {
         let network = IpNetwork::from_str(&cidr)?;
         let results = scan_network(network, args.port, args.concurrent, args.timeout_ms, args.verbose).await;
         all_results.extend(results);
     }
 
+    // Salva os resultados se necessário
     if let Some(output_path) = args.output {
-        write_results(&output_path, &all_results, &scan_info)?;
+        write_results(&output_path, &all_results, &format!("Escaneamento realizado na(s) rede(s) {:?}", cidrs))?;
     }
 
     Ok(())
