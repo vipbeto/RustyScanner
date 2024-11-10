@@ -1,6 +1,7 @@
 #!bin/bash/sh
 apt update
 apt upgrade -y
+apt list --upgradable
 pkg update 
 pkg upgrade -y
 pkg install rust git
