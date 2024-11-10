@@ -1,4 +1,4 @@
-#!bin/bash/sh
+#!/bin/sh
 pkg update -y
 pkg upgrade -y
 apt update -y
