@@ -1,10 +1,4 @@
 #!/bin/sh
-pkg update -y
-pkg upgrade -y
-apt update -y
-apt upgrade -y
-apt list --upgradable
-apt --fix-broken install
 pkg install rust -y
 pkg install git -y
 rm -rf ~/RustyScanner
