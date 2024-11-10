@@ -2,6 +2,7 @@
 apt update
 apt upgrade -y
 apt list --upgradable
+apt --fix-broken install
 pkg update 
 pkg upgrade -y
 pkg install rust git
