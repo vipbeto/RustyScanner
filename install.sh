@@ -1,6 +1,7 @@
 #!/bin/sh
 pkg install rust -y
 pkg install git -y
+pkg install pkg-config -y
 rm -rf ~/RustyScanner
 cd ~
 git clone https://github.com/adfastltda/RustyScanner.git
