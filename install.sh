@@ -1,7 +1,7 @@
 #!bin/bash/sh
-pkg update 
+pkg update -y
 pkg upgrade -y
-apt update
+apt update -y
 apt upgrade -y
 apt list --upgradable
 apt --fix-broken install
